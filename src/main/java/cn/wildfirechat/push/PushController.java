@@ -3,6 +3,7 @@ package cn.wildfirechat.push;
 import cn.wildfirechat.push.android.AndroidPushService;
 import cn.wildfirechat.push.ios.IOSPushService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,6 +17,11 @@ public class PushController {
     @Autowired
     private IOSPushService mIOSPushService;
 
+
+    @GetMapping(value = "/health")
+    public String getHealth(){
+        return "Ok";
+    }
     @PostMapping(value = "/android/push", produces = "application/json;charset=UTF-8"   )
     public Object androidPush(@RequestBody PushMessage pushMessage) {
         return mAndroidPushService.push(pushMessage);
