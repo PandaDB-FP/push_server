@@ -1,0 +1,131 @@
+pipeline {
+  agent any
+  
+ triggers {
+    githubPush()
+  } 
+
+  tools {
+      
+    maven 'MAVEN_HOME'
+    
+  }
+
+  stages {
+      
+    stage('Git Clone') {
+      steps {
+       
+       //git credentialsId: 'GIT_HUB_AMLESH', url: 'https://github.com/yasirshabbir44/push_server.git'
+	   git branch: 'dev', credentialsId: 'GIT_HUB_AMLESH', url: 'https://github.com/yasirshabbir44/push_server.git'
+      
+      sh '''
+     cd /var/lib/jenkins/workspace/push_server
+     git pull git@github.com:yasirshabbir44/push_server.git dev
+       
+      '''
+        
+        
+        
+      }
+    }
+    
+    stage('Build') {
+      steps {
+        //sh 'mvn install'
+        
+        //sh 'mvn -B -DskipTests clean package'
+        
+        sh '''
+        cd /var/lib/jenkins/workspace/push_server
+        mvn compile
+        mvn clean install
+        
+        '''
+        
+    
+      }
+    }
+    
+    stage('Build Docker-push_server') {
+      steps {
+        sh '''
+        cd /var/lib/jenkins/workspace/push_server
+        docker build -t push_server .
+       
+       '''
+      
+      }
+    }
+    
+   stage('Logging into AWS ECR') {
+            steps {
+                script {
+                sh "aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin 512383841983.dkr.ecr.ap-southeast-1.amazonaws.com"
+				//sh "aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin 760495509831.dkr.ecr.us-east-2.amazonaws.com"
+                }
+                 
+            }
+        }
+		
+   stage('Push wildfire-push_server Image to ECR ') {
+        
+      steps {
+           
+		   // wildchat-wallet-service image
+           sh "docker tag push_server:latest 512383841983.dkr.ecr.ap-southeast-1.amazonaws.com/push_server:dev"
+           sh "docker push 512383841983.dkr.ecr.ap-southeast-1.amazonaws.com/push_server:dev"
+		   
+		   
+           
+           
+      }
+      
+      
+    }
+	
+   stage('Deploying push_server to ECS ') {
+        
+      steps {
+        
+        script{
+
+     // sh "/usr/bin/aws ecs update-service --cluster runpoint-ecs --service runscore-admin-service --task-definition runscore-admin-tsk:10 --desired-count 1 --force-new-deployment"
+      
+        
+	  sh "/usr/bin/aws ecs update-service --cluster wildfire-ecs-dev --service dev-push-server-svc --task-definition dev-push-server-tsk --desired-count 1 --force-new-deployment"
+          
+            
+        }
+	  
+           
+           
+      }
+      
+      
+    } 
+    
+    stage('Slack Notification')
+        {
+            steps{
+            //slackSend channel: 'jenkins-build-update', failOnError: true, message: 'Wild chat build notification', notifyCommitters: true, teamDomain: 'aipigeonworkspace', tokenCredentialId: 'slackjenkinstoken'
+            
+            slackSend channel: 'luckbuydevelopment', message: 'Jenkins build status update'
+            
+            //slackSend channel: 'jenkins-build-update', message: 'slackSend "started ${env.JOB_NAME} ${env.BUILD_NUMBER} (<${env.BUILD_URL}|Open>)"', notifyCommitters: true, teamDomain: 'aipigeonworkspace', tokenCredentialId: 'slackjenkinstoken'
+        }
+        }
+  }
+post {
+    success {
+      slackSend (color: '#00FF00', message: "SUCCESSFUL: pipeline '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
+     }
+failure {
+      slackSend (color: '#FF0000', message: "FAILED: pipeline & Triggering ROLLOUT pipeline '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
+     }
+aborted {
+      slackSend (color: '#808080', message: "ABORTED: pipeline '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
+     }
+}
+  
+}
